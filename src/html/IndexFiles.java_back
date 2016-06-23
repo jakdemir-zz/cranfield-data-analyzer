@@ -1,0 +1,156 @@
+/**
+ * Copyright 2004 The Apache Software Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.index.IndexWriter;
+
+import java.io.*;
+//import java.io.File;
+//import java.io.FileNotFoundException;
+//import java.io.IOException;
+import java.util.Date;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.DateField;
+
+class IndexFiles {
+  public static void main(String[] args) throws IOException {
+    String usage = "java " + IndexFiles.class + " <root_directory>";
+    if (args.length != 0) {
+      System.err.println("Usage: " + usage);
+      System.exit(1);
+    }
+
+    Date start = new Date();
+    try {
+
+      IndexWriter writer = new IndexWriter("index", new StandardAnalyzer(), true);
+      indexDocs(writer, new File(".\\TREC"));
+
+      writer.optimize();
+      writer.close();
+
+      Date end = new Date();
+
+      System.out.print(end.getTime() - start.getTime());
+      System.out.println(" total milliseconds");
+
+    } catch (IOException e) {
+      System.out.println(" caught a " + e.getClass() +
+       "\n with message: " + e.getMessage());
+    }
+  }
+
+  public static void indexDocs(IndexWriter writer, File file)
+    throws IOException {
+    // do not try to index files that cannot be read
+    if (file.canRead()) {
+      if (file.isDirectory()) {
+        String[] files = file.list();
+        // an IO error could occur
+        if (files != null) {
+          for (int i = 0; i < files.length; i++) {
+            indexDocs(writer, new File(file, files[i]));
+          }
+        }
+      } else {
+        //System.out.println("adding " + file);
+
+       //our code *********************************************************
+        String record = null;
+        int a,b,stringNum=0,i=0;
+        //String[] docContents = new String[1000];
+       // String[] docNos = new String[10000];
+        String docName;
+        Document doc = new Document();
+		//for (i=0;i<1000;i++)
+			//docContents[i]="";
+        //end our code *********************************************************
+        try {
+          //orginal   writer.addDocument(FileDocument.Document(file));
+
+          //our code *********************************************************
+ 	FileInputStream is = new FileInputStream(file);
+	BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+
+        record = new String();
+        while ((record = reader.readLine()) != null)
+        {
+            a= record.lastIndexOf("<DOCNO>");
+            b=record.indexOf("</DOCNO>");
+
+
+            if(a>=0 && b>0) // if this line contains the DOCNO
+            {
+                stringNum++;
+                //docNos[stringNum] = record.substring(a+7,b-1);
+                docName=record.substring(a+7,b).trim();
+                // add a document
+                if (stringNum>=1)
+                {
+                    //index previous document
+                    if (stringNum>=2)
+                         writer.addDocument(doc);
+
+                    //start new document
+                    doc = new Document();
+                    //doc.add(new Field("path", file.getPath()+ "/"+docName,
+                    doc.add(new Field("path", docName,
+                                      Field.Store.YES,
+                                      Field.Index.UN_TOKENIZED));
+                    //System.out.println("adding " + file.getPath()+ "/"+docName);
+                    System.out.println("adding " +docName);
+
+                    doc.add(new Field("modified",
+                          DateField.timeToString(file.lastModified()),
+                          Field.Store.YES,
+                          Field.Index.UN_TOKENIZED));
+                }
+            }
+            else
+            {
+                doc.add(new Field("contents",record,
+                                  Field.Store.YES,
+                                  Field.Index.TOKENIZED,
+                                  Field.TermVector.YES));
+                //docContents[stringNum] = docContents[stringNum] + record;
+                // add contents to document
+            }
+            a=0;
+            b=0;
+         }// end while
+           //docNos[0] = Integer.toString(stringNum);
+          //docName=Integer.toString(stringNum);
+//System.out.println("The number of documents is " + docNos[0]);
+//System.out.println("The DOCNO is "+docNos[5]);
+//System.out.println(docContents[5]);
+
+
+
+        //System.out.println(is); //Display the string.
+
+// end our code **************************************************************
+
+        }
+        // at least on windows, some temporary files raise this exception with an "access denied" message
+        // checking if the file can be read doesn't help
+        catch (FileNotFoundException fnfe) {
+          ;
+        }
+      }
+    }
+  }
+}

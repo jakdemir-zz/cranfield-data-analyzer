@@ -1,0 +1,171 @@
+/**
+ * Copyright 2004 The Apache Software Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.*;
+
+
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.search.Searcher;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.Hits;
+import org.apache.lucene.queryParser.QueryParser;
+import java.io.*;
+
+class SearchFiles {
+
+    public static void batchRun(String q_f,
+				String out_f,
+				Searcher searcher,
+				Analyzer analyzer) {
+	try {
+	    BufferedReader br = new BufferedReader(new FileReader(new File(q_f)));
+	    String a_line = null;
+	    String q_id = null;
+	    StringBuffer q = new StringBuffer();
+	    while ((a_line = br.readLine()) != null) {
+		if (a_line.trim().length() == 0) {
+		    continue;
+		}
+		if (a_line.trim().equals("<DOCNO>")) {
+		    a_line = br.readLine();
+		    if (a_line != null) {
+			q_id = a_line;
+		    }
+		    br.readLine(); //skip </DOCNO>
+		}
+		while ((a_line = br.readLine()) != null &&
+		       a_line.trim().length() != 0) {
+		    //get question
+		    q.append(a_line + " ");
+		}
+		if (q.length() > 0) {
+		    Query query = new QueryParser("contents",analyzer).parse(q.toString().trim());
+		    System.out.println("Searching for: " + query.toString("contents"));
+		    
+		    Hits hits = searcher.search(query);
+		    System.out.println(hits.length() + " total matching documents");
+		    
+		    final int HITS_PER_PAGE = 1000; // was 10
+		    BufferedWriter out = new BufferedWriter(new FileWriter(out_f, true));
+		    //out.write("aString");
+		    
+		    int end = Math.min(hits.length(), HITS_PER_PAGE);
+		    for (int i = 0; i < end; i++) {
+			
+			Document doc = hits.doc(i);
+			float score = hits.score(i);
+			String path = doc.get("path");
+			if (path != null) {
+			    out.write(q_id + " 0  " + path + "  " + i + " " +score+"  CSI550\n");
+			    System.out.println(q_id + " 0  " + path + "  " + i + " " +score+"  CSI550");
+			} else {
+			    String url = doc.get("url");
+			    if (url != null) {
+				System.out.println(i + ". " + url);
+				System.out.println("   - " + doc.get("title"));
+			    } else {
+				System.out.println(i + ". " + "No path nor URL for this document");
+			    }
+			}
+		    }
+		    out.close();
+		}
+		if (a_line == null) {
+		    //already end of query file
+		    break;
+		}
+		q_id = null;
+		q = new StringBuffer();
+	    }
+	}catch(Exception e) {
+	    e.printStackTrace();
+	}
+    }
+
+  public static void main(String[] args) {
+    try {
+      Searcher searcher = new IndexSearcher("index");
+      Analyzer analyzer = new StandardAnalyzer();
+
+      if (args.length == 2) {
+	  batchRun(args[0], args[1], searcher, analyzer);
+	  return;
+      }
+      BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+      while (true) {
+	System.out.print("Query: ");
+	String line = in.readLine();
+
+	if (line.length() == -1)
+	  break;
+
+	Query query = new QueryParser("contents",analyzer).parse(line);
+	System.out.println("Searching for: " + query.toString("contents"));
+
+	Hits hits = searcher.search(query);
+	System.out.println(hits.length() + " total matching documents");
+
+	final int HITS_PER_PAGE = 5000; // was 10
+	try {
+        BufferedWriter out = new BufferedWriter(new FileWriter("C:/lucene_results", true));
+        //out.write("aString");
+
+        for (int start = 0; start < hits.length(); start += HITS_PER_PAGE) {
+	  int end = Math.min(hits.length(), start + HITS_PER_PAGE);
+	  for (int i = start; i < end; i++) {
+
+	    Document doc = hits.doc(i);
+            float score = hits.score(i);
+	    String path = doc.get("path");
+	    if (path != null) {
+                out.write("301 0"+ "  " + path + "  " + i + " " +score+"  CSI550\n");
+              System.out.println("301 0"+ "  " + path + "  " + i + " " +score+"  CSI550");
+	      } else {
+              String url = doc.get("url");
+	      if (url != null) {
+		System.out.println(i + ". " + url);
+		System.out.println("   - " + doc.get("title"));
+	      } else {
+		System.out.println(i + ". " + "No path nor URL for this document");
+	      }
+	    }
+	  }
+
+	  if (hits.length() > end) {
+	    System.out.print("more (y/n) ? ");
+	    line = in.readLine();
+	    if (line.length() == 0 || line.charAt(0) == 'n')
+	      break;
+	  }
+	}
+        out.close();
+         } catch (IOException e) {System.out.println("could not create output file");
+    }
+      }
+      searcher.close();
+
+    } catch (Exception e) {
+      System.out.println(" caught a " + e.getClass() +
+			 "\n with message: " + e.getMessage());
+    }
+  }
+}
